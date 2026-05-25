@@ -1,0 +1,5 @@
+temperature_2m
+cloud_cover
+wind_speed_10m
+tomorrow_temperature_2m_max
+wind_speed_10m
