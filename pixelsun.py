@@ -1,4 +1,8 @@
 import os
+# FORCEER XORG BACKEND: Dit moet absoluut op regel 1 en 2 staan, vóór elke andere import!
+# Dit voorkomt dat pystray zoekt naar ontbrekende Linux Ayatana/AppIndicator3 libraries.
+os.environ['PYSTRAY_BACKEND'] = 'xorg'
+
 import threading
 import time
 import tkinter as tk
@@ -7,6 +11,7 @@ from flask import Flask, jsonify
 from PIL import Image, ImageDraw, ImageFont
 from pypixelcolor import Client
 import requests
+import pystray
 
 app = Flask(__name__)
 
@@ -63,7 +68,6 @@ def laad_configuratie():
             print(f"FOUT: '{CONFIG_FILE}' moet minimaal 3 regels bevatten (MAC, Landcode, Plaatsnaam)!")
             exit(1)
             
-        # COMMENTED: print(f"Configuratie ingelezen: MAC={regels[0]}, Land={regels[1]}, Plaats={regels[2]}")
         return regels[0], regels[1], regels[2]
     except Exception as e:
         print(f"Fout bij het lezen van {CONFIG_FILE}: {e}")
@@ -71,7 +75,6 @@ def laad_configuratie():
 
 def haal_coordinaten_op(landcode, plaatsnaam):
     """Zoekt de latitude en longitude op via de Open-Meteo Geocoding API"""
-    # COMMENTED: print(f"Coördinaten zoeken voor {plaatsnaam} ({landcode})...")
     url = "https://geocoding-api.open-meteo.com/v1/search"
     params = {"name": plaatsnaam, "count": 5, "language": "nl", "format": "json"}
     
@@ -83,11 +86,9 @@ def haal_coordinaten_op(landcode, plaatsnaam):
             
         for resultaat in response['results']:
             if resultaat.get('country_code', '').upper() == landcode.upper():
-                # COMMENTED: print(f"Locatie gevonden! Lat: {resultaat['latitude']}, Lon: {resultaat['longitude']}")
                 return resultaat['latitude'], resultaat['longitude']
                 
         eerste = response['results'][0]
-        # COMMENTED: print(f"Waarschuwing: Geen exacte land-match, we pakken de eerste optie: {eerste['name']}")
         return eerste['latitude'], eerste['longitude']
     except Exception as e:
         print(f"Fout bij het ophalen van coördinaten: {e}")
@@ -196,7 +197,6 @@ def update_led_weer():
     
     huidige_regels = get_weer()
     if not huidige_regels or huidige_regels == laatste_data:
-        # COMMENTED: if huidige_regels == laatste_data: print("Weer gecontroleerd: De tekst op het scherm is exact gelijk. Update overgeslagen.")
         return
 
     img = Image.new('RGB', (32, 32), color=(0, 0, 0))
@@ -215,7 +215,6 @@ def update_led_weer():
         with Client(address=MAC_ADRES) as device:
             if hasattr(device, 'send_image'): device.send_image(TEMP_FILE)
             else: device.send_file(TEMP_FILE)
-        # COMMENTED: print(f"Weer geüpdatet voor {PLAATSNAAM} (Gedimde modus)")
         laatste_data = huidige_regels
     except Exception as e:
         print(f"Bluetooth fout: {e}")
@@ -225,20 +224,55 @@ def herhaalde_update_loop():
         update_led_weer()
         time.sleep(60)
 
+# --- SYSTEM TRAY (TRAYBAR) LOGICA ---
+globale_tray = None
+
+def maak_tray_icoon(root):
+    """Genereert een dynamisch icoontje in het geheugen voor de traybar"""
+    global globale_tray
+    
+    # Maak een 64x64 icoontje dat matcht met de roze/magenta kleur uit de GUI
+    image = Image.new('RGB', (64, 64), color=(255, 60, 255))
+    d = ImageDraw.Draw(image)
+    d.text((20, 18), "W", fill=(255, 255, 255))
+    
+    def toon_applicatie(icon, item):
+        icon.stop()
+        # Herstel het Tkinter venster veilig in de hoofdthread
+        root.after(0, lambda: (root.deiconify(), root.lift()))
+
+    def afsluiten_applicatie(icon, item):
+        icon.stop()
+        # Sluit Tkinter volledig af
+        root.after(0, root.destroy)
+
+    menu = pystray.Menu(
+        pystray.MenuItem('Openen', toon_applicatie, default=True),
+        pystray.MenuItem('Afsluiten', afsluiten_applicatie)
+    )
+    
+    globale_tray = pystray.Icon("weerstation", image, "Weerstation Settings", menu)
+    globale_tray.run()
+
+def verklein_naar_tray(root):
+    """Verbergt het Tkinter venster en start de tray-thread"""
+    root.withdraw()
+    tray_thread = threading.Thread(target=maak_tray_icoon, args=(root,), daemon=True)
+    tray_thread.start()
+
 # --- GUI LOGICA (TKINTER) ---
 def on_dropdown_select(event, index, combo):
     global actieve_keuzes, laatste_data
     nieuwe_waarde = combo.get()
     actieve_keuzes[index] = nieuwe_waarde
     sla_instellingen_op(actieve_keuzes)
-    # COMMENTED: print(f"Regel {index+1} aangepast naar: {nieuwe_waarde}. Opgeslagen.")
     laatste_data = None
     threading.Thread(target=update_led_weer, daemon=True).start()
 
 def bouw_gui():
     root = tk.Tk()
     root.title("Weerstation Settings")
-    root.geometry("400x300")
+    root.geometry("400x340")  # Hoogte vergroot voor de extra knop
     root.resizable(False, False)
 
     label_titel = tk.Label(root, text=f"Display Opties - {PLAATSNAAM}", font=("Arial", 12, "bold"))
@@ -256,10 +290,16 @@ def bouw_gui():
         combo.pack(side="left", fill="x", expand=True)
         combo.bind("<<ComboboxSelected>>", lambda event, idx=i, cb=combo: on_dropdown_select(event, idx, cb))
 
-    lbl_info = tk.Label(root, text="Wijzigingen worden direct opgeslagen.", fg="gray")
-    lbl_info.pack(side="bottom", pady=10)
+    # Knop om handmatig te verkleinen naar de traybar
+    btn_tray = tk.Button(root, text="Verklein naar Tray", command=lambda: verklein_naar_tray(root))
+    btn_tray.pack(pady=10)
 
-    # COMMENTED: print(f"Weerpaneel gestart voor {PLAATSNAAM}...")
+    lbl_info = tk.Label(root, text="Wijzigingen worden direct opgeslagen.", fg="gray")
+    lbl_info.pack(side="bottom", pady=5)
+
+    # Zorg dat het kruisje (X) rechtsboven het venster ook verbergt ipv afsluit
+    root.protocol('WM_DELETE_WINDOW', lambda: verklein_naar_tray(root))
+
     root.mainloop()
 
 if __name__ == "__main__":
