@@ -74,6 +74,14 @@ def load_config():
         print(f"Error while reading {CONFIG_FILE}: {e}")
         exit(1)
 
+def save_config(mac, country, city):
+    """Saves the MAC address, country code, and city name back to config.txt"""
+    try:
+        with open(CONFIG_FILE, "w") as f:
+            f.write(f"{mac}\n{country}\n{city}\n")
+    except Exception as e:
+        print(f"Error while saving {CONFIG_FILE}: {e}")
+
 def fetch_coordinates(country_code, city_name):
     """Looks up the latitude and longitude via the Open-Meteo Geocoding API"""
     url = "https://geocoding-api.open-meteo.com/v1/search"
@@ -83,7 +91,7 @@ def fetch_coordinates(country_code, city_name):
         response = requests.get(url, params=params).json()
         if 'results' not in response:
             print(f"ERROR: Could not find the location '{city_name}' at Open-Meteo.")
-            exit(1)
+            return None, None
             
         for result in response['results']:
             if result.get('country_code', '').upper() == country_code.upper():
@@ -93,7 +101,7 @@ def fetch_coordinates(country_code, city_name):
         return first_result['latitude'], first_result['longitude']
     except Exception as e:
         print(f"Error while fetching coordinates: {e}")
-        exit(1)
+        return None, None
 
 def load_settings():
     """Loads the dropdown settings from settings.txt or returns the defaults"""
@@ -146,8 +154,11 @@ def format_unit(unit):
 
 def fetch_weather_data():
     """Dynamically fetches both current and forecast data from the API"""
-    global active_choices
+    global active_choices, LATITUDE, LONGITUDE
     
+    if LATITUDE is None or LONGITUDE is None:
+        return None
+        
     current_params = list({c for c in active_choices if not c.startswith("tomorrow_")})
     daily_params = list({c.replace("tomorrow_", "") for c in active_choices if c.startswith("tomorrow_")})
                 
@@ -274,7 +285,7 @@ def minimize_to_tray(root):
     tray_thread = threading.Thread(target=create_tray_icon, args=(root,), daemon=True)
     tray_thread.start()
 
-# --- GUI LOGICA (TKINTER) ---
+# --- GUI LOGIC (TKINTER) ---
 def on_dropdown_select(event, index, combo):
     global active_choices, last_data
     new_value = combo.get()
@@ -283,15 +294,67 @@ def on_dropdown_select(event, index, combo):
     last_data = None
     threading.Thread(target=update_led_display, daemon=True).start()
 
+def on_location_change(event, country_entry, city_entry, title_label):
+    """Triggered when location fields change focus or receive enter; saves config and updates coordinates"""
+    global COUNTRY_CODE, CITY_NAME, LATITUDE, LONGITUDE, last_data
+    
+    new_country = country_entry.get().strip()
+    new_city = city_entry.get().strip()
+    
+    if new_country and new_city and (new_country != COUNTRY_CODE or new_city != CITY_NAME):
+        COUNTRY_CODE = new_country
+        CITY_NAME = new_city
+        save_config(MAC_ADDRESS, COUNTRY_CODE, CITY_NAME)
+        
+        # Re-fetch coordinates asynchronously to avoid locking UI
+        def update_coords_async():
+            global LATITUDE, LONGITUDE, last_data
+            lat, lon = fetch_coordinates(COUNTRY_CODE, CITY_NAME)
+            if lat is not None and lon is not None:
+                LATITUDE, LONGITUDE = lat, lon
+                last_data = None # Wipe display cache to force redraw
+                title_label.config(text=f"Display Options - {CITY_NAME}")
+                update_led_display()
+                
+        threading.Thread(target=update_coords_async, daemon=True).start()
+
 def build_gui():
     root = tk.Tk()
     root.title("Weather Station Settings")
-    root.geometry("400x340")
+    root.geometry("400x420")
     root.resizable(False, False)
 
     label_title = tk.Label(root, text=f"Display Options - {CITY_NAME}", font=("Arial", 12, "bold"))
     label_title.pack(pady=10)
 
+    # --- LOCATION INPUT FIELDS ---
+    frame_loc = tk.LabelFrame(root, text=" Location Settings (Press Enter to Apply) ", padx=10, pady=10)
+    frame_loc.pack(fill="x", padx=20, pady=10)
+
+    # Country Field
+    frame_country = tk.Frame(frame_loc)
+    frame_country.pack(fill="x", pady=2)
+    lbl_country = tk.Label(frame_country, text="Country Code:", width=12, anchor="w")
+    lbl_country.pack(side="left")
+    entry_country = tk.Entry(frame_country)
+    entry_country.insert(0, COUNTRY_CODE)
+    entry_country.pack(side="left", fill="x", expand=True)
+
+    # City Field
+    frame_city = tk.Frame(frame_loc)
+    frame_city.pack(fill="x", pady=2)
+    lbl_city = tk.Label(frame_city, text="City Name:", width=12, anchor="w")
+    lbl_city.pack(side="left")
+    entry_city = tk.Entry(frame_city)
+    entry_city.insert(0, CITY_NAME)
+    entry_city.pack(side="left", fill="x", expand=True)
+
+    # Bind verification checks to both inputs
+    for entry in (entry_country, entry_city):
+        entry.bind("<FocusOut>", lambda event: on_location_change(event, entry_country, entry_city, label_title))
+        entry.bind("<Return>", lambda event: on_location_change(event, entry_country, entry_city, label_title))
+
+    # --- DROP DOWN SELECTIONS ---
     for i in range(5):
         frame = tk.Frame(root)
         frame.pack(fill="x", padx=20, pady=5)
