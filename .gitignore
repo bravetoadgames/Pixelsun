@@ -308,3 +308,19 @@ pixelsun-1.0-ubuntu-x86_64/config.txt
 pixelsun-1.0-ubuntu-x86_64/tom-thumb.ttf
 
 pixelsun.spec
+
+.spyproject/config/codestyle.ini
+
+.spyproject/config/defaults/defaults-codestyle-0.2.0.ini
+
+.spyproject/config/defaults/defaults-encoding-0.2.0.ini
+
+.spyproject/config/defaults/defaults-vcs-0.2.0.ini
+
+.spyproject/config/defaults/defaults-workspace-0.2.0.ini
+
+.spyproject/config/encoding.ini
+
+.spyproject/config/vcs.ini
+
+.spyproject/config/workspace.ini

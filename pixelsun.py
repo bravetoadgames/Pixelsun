@@ -139,11 +139,11 @@ def update_led_weer():
 
     # Layout voor 32x32 display - RGB-waardes zijn teruggebracht naar ~10% helderheid
 # Layout voor 32x32 display - Iets fellere RGB-waardes zodat het scherm niet zwart blijft
-    d.text((1, 0),  regel1, fill=(120, 120, 60), font=font)    # Zacht Wit
-    d.text((1, 6),  regel2, fill=(90, 90, 60), font=font)     # Zacht Cyaan
-    d.text((1, 12), regel3, fill=(60, 60, 60), font=font)      # Zacht Groen
-    d.text((1, 18), regel4, fill=(0, 60, 80), font=font)     # Zacht Oranje
-    d.text((1, 24), regel5, fill=(0, 0, 80), font=font)     # Zacht Roze
+    d.text((1, 0),  regel1, fill=(120, 200, 120), font=font)    # Zacht Wit
+    d.text((1, 6),  regel2, fill=(100, 170, 100), font=font)     # Zacht Cyaan
+    d.text((1, 12), regel3, fill=(80, 150, 80), font=font)      # Zacht Groen
+    d.text((1, 18), regel4, fill=(0, 120, 200), font=font)     # Zacht Oranje
+    d.text((1, 24), regel5, fill=(0, 60, 150), font=font)     # Zacht Roze
     
     img.save(TEMP_FILE, "BMP")
     
