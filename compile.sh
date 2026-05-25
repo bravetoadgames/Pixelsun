@@ -1,5 +1,6 @@
 rm -r dist
 rm pixelsun
+export STATICX_ALLOW_REPATH=1
 pyinstaller --onefile --noconsole pixelsun.py
 staticx dist/pixelsun dist/pixelsun_static
 mv dist/pixelsun_static ./pixelsun
