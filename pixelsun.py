@@ -19,7 +19,7 @@ app = Flask(__name__)
 CONFIG_FILE = "config.txt"
 SETTINGS_FILE = "settings.txt"
 TEMP_FILE = "/tmp/weather_display.bmp"
-FONT_PATH = "tom-thumb.ttf" 
+FONT_PATH = "tom-thumb.ttf"
 
 AVAILABLE_OPTIONS = [
     # Current (Now)
@@ -47,7 +47,8 @@ DEFAULT_SETTINGS = [
 # --- SOURCE FUNCTIONS & UTILS ---
 def kmh_to_beaufort(kmh):
     """Converts wind speed in km/h to the Beaufort scale"""
-    if kmh is None: return 0
+    if kmh is None: 
+        return 0
     limits = [2, 6, 12, 20, 29, 39, 50, 62, 75, 89, 103, 118]
     for bft, limit in enumerate(limits):
         if kmh < limit:
@@ -147,19 +148,14 @@ def fetch_weather_data():
     """Dynamically fetches both current and forecast data from the API"""
     global active_choices
     
-    current_params = []
-    daily_params = []
-    
-    for choice in active_choices:
-        if choice.startswith("tomorrow_"):
-            om_name = choice.replace("tomorrow_", "")
-            if om_name not in daily_params: daily_params.append(om_name)
-        else:
-            if choice not in current_params: current_params.append(choice)
+    current_params = list({c for c in active_choices if not c.startswith("tomorrow_")})
+    daily_params = list({c.replace("tomorrow_", "") for c in active_choices if c.startswith("tomorrow_")})
                 
     url = "https://api.open-meteo.com/v1/forecast"
     params = {
-        "latitude": LATITUDE, "longitude": LONGITUDE, "timezone": "auto",
+        "latitude": LATITUDE, 
+        "longitude": LONGITUDE, 
+        "timezone": "auto",
         "current": ",".join(current_params) if current_params else None,
         "daily": ",".join(daily_params) if daily_params else None
     }
@@ -201,8 +197,10 @@ def update_led_display():
 
     img = Image.new('RGB', (32, 32), color=(0, 0, 0))
     d = ImageDraw.Draw(img)
-    try: font = ImageFont.truetype(FONT_PATH, 16)
-    except: font = ImageFont.load_default()
+    try: 
+        font = ImageFont.truetype(FONT_PATH, 16)
+    except Exception: 
+        font = ImageFont.load_default()
 
     # Color scheme per line
     COLORS = [(255, 255, 120), (255, 255, 60), (200, 200, 0), (255, 120, 255), (255, 60, 255)]
@@ -213,8 +211,10 @@ def update_led_display():
     
     try:
         with Client(address=MAC_ADDRESS) as device:
-            if hasattr(device, 'send_image'): device.send_image(TEMP_FILE)
-            else: device.send_file(TEMP_FILE)
+            if hasattr(device, 'send_image'): 
+                device.send_image(TEMP_FILE)
+            else: 
+                device.send_file(TEMP_FILE)
         last_data = current_lines
     except Exception as e:
         print(f"Bluetooth error: {e}")
@@ -231,14 +231,11 @@ def create_tray_icon(root):
     """Generates an in-memory dynamic system tray icon representing a shiny sun"""
     global global_tray
     
-    # Create a dark gray square background (64x64)
     image = Image.new('RGB', (64, 64), color=(50, 50, 50))
     d = ImageDraw.Draw(image)
-    
     yellow = (255, 220, 0)
     
     # 1. Draw 8 sun rays around the center
-    # Line format: [start_x, start_y, end_x, end_y]
     rays = [
         [32, 10, 32, 16],  # Top
         [32, 48, 32, 54],  # Bottom
@@ -249,7 +246,6 @@ def create_tray_icon(root):
         [16, 48, 22, 42],  # Bottom-Left diagonal
         [48, 48, 42, 42]   # Bottom-Right diagonal
     ]
-    
     for ray in rays:
         d.line(ray, fill=yellow, width=2)
         
@@ -258,12 +254,10 @@ def create_tray_icon(root):
     
     def show_application(icon, item):
         icon.stop()
-        # Safely restore the Tkinter window in the main thread
         root.after(0, lambda: (root.deiconify(), root.lift()))
 
     def quit_application(icon, item):
         icon.stop()
-        # Completely close Tkinter
         root.after(0, root.destroy)
 
     menu = pystray.Menu(
@@ -280,7 +274,7 @@ def minimize_to_tray(root):
     tray_thread = threading.Thread(target=create_tray_icon, args=(root,), daemon=True)
     tray_thread.start()
 
-# --- GUI LOGIC (TKINTER) ---
+# --- GUI LOGICA (TKINTER) ---
 def on_dropdown_select(event, index, combo):
     global active_choices, last_data
     new_value = combo.get()
